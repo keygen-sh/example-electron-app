@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Hello world</title>
+    <script>
+      const user = localStorage.getItem("currentUser")
+      window.currentUser = JSON.parse(user)
+    </script>
+  </head>
+  <body>
+    <h1>
+      Hello, <script>document.write(currentUser.attributes.fullName)</script>!
+      <button type="button" id="logout">Logout</button>
+    </h1>
+    <p>
+      Below is a list of features for our app. Click one to check whether or not
+      you have a valid license for the feature.
+    </p>
+    <ul>
+      <li>
+        <button type="button" id="feature-1" disabled>Feature #1</button>
+      </li>
+      <li>
+        <button type="button" id="feature-2" disabled>Feature #2</button>
+      </li>
+      <li>
+        <button type="button" id="feature-3" disabled>Feature #3</button>
+      </li>
+    </ul>
+    <script>
+      const { getLicenses, clearSession, appFeatures } = require("./keygen")
+
+      async function main() {
+        const { licenses } = await getLicenses()
+
+        // Allow the user to logout and clear the current session
+        const logout = document.getElementById("logout")
+        logout.addEventListener("click", () => clearSession())
+
+        // Check if the current user can use a feature when clicked
+        const feature1 = document.getElementById("feature-1")
+        const feature2 = document.getElementById("feature-2")
+        const feature3 = document.getElementById("feature-3")
+
+        feature1.disabled = false
+        feature1.addEventListener("click", () => {
+          const license = licenses[appFeatures.KEYGEN_FEATURE_1]
+          alert(
+            `You ${license ? 'can' : 'cannot'} use this feature! ${license ? '🎉' : '😢'}`
+          )
+        })
+
+        feature2.disabled = false
+        feature2.addEventListener("click", () => {
+          const license = licenses[appFeatures.KEYGEN_FEATURE_2]
+          alert(
+            `You ${license ? 'can' : 'cannot'} use this feature! ${license ? '🎊' : '😩'}`
+          )
+        })
+
+        feature3.disabled = false
+        feature3.addEventListener("click", () => {
+          const license = licenses[appFeatures.KEYGEN_FEATURE_3]
+          alert(
+            `You ${license ? 'can' : 'cannot'} use this feature! ${license ? '💥' : '😭'}`
+          )
+        })
+      }
+
+      main()
+    </script>
+  </body>
+</html>

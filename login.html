@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+  </head>
+  <body>
+    <h1>Login</h1>
+    <form id="login">
+      <label for="email">
+        Email
+      </label>
+      <br>
+      <input type="email" name="email" id="email" value="demo@example.com">
+      <br>
+      <label for="password">
+        Password
+      </label>
+      <br>
+      <input type="password" name="password" id="password" value="demo">
+      <br>
+      <br>
+      <button type="submit">
+        Login
+      </button>
+    </form>
+    <script>
+      const { ipcRenderer } = require("electron")
+      const { getSession, createSession } = require("./keygen")
+
+      // Check if there's an existing session
+      const session = getSession()
+      if (session != null) {
+        ipcRenderer.send("authenticated")
+      }
+
+      // Authenticate user and create a new session
+      const login = document.getElementById("login")
+
+      login.addEventListener("submit", async (event) => {
+        event.preventDefault()
+
+        const email = document.getElementById("email")
+        const password = document.getElementById("password")
+        const { token, errors } = await createSession(email.value, password.value)
+        if (errors) {
+          const [{ title, detail }] = errors
+
+          alert(`${title}: ${detail}`)
+
+          return false
+        }
+
+        ipcRenderer.send("authenticated")
+      })
+    </script>
+  </body>
+</html>
