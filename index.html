@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <title>Hello world</title>
     <script>
-      const user = localStorage.getItem("currentUser")
-      window.currentUser = JSON.parse(user)
+      const { app } = require('electron').remote
+      const { store } = require("./keygen")
+
+      const currentUser = JSON.parse(store.get("currentUser"))
+      const version = app.getVersion()
     </script>
   </head>
   <body>
@@ -17,19 +20,26 @@
       Below is a list of features for our app. Click one to check whether or not
       you have a valid license for the feature.
     </p>
+    <p>
+      Current version is v<script>document.write(version)</script>.
+    </p>
     <ul>
       <li>
-        <button type="button" id="feature-1" disabled>Feature #1</button>
+        <button type="button" id="feature-1" disabled>Try Feature #1</button>
       </li>
       <li>
-        <button type="button" id="feature-2" disabled>Feature #2</button>
+        <button type="button" id="feature-2" disabled>Try Feature #2</button>
       </li>
       <li>
-        <button type="button" id="feature-3" disabled>Feature #3</button>
+        <button type="button" id="feature-3" disabled>Try Feature #3</button>
       </li>
     </ul>
     <script>
       const { getLicenses, clearSession, appFeatures } = require("./keygen")
+      const { ipcRenderer } = require('electron')
+
+      ipcRenderer.on('error', (_, ...args) => console.error(...args))
+      ipcRenderer.on('log', (_, ...args) => console.log(...args))
 
       async function main() {
         const { licenses } = await getLicenses()
@@ -45,26 +55,47 @@
 
         feature1.disabled = false
         feature1.addEventListener("click", () => {
-          const license = licenses[appFeatures.KEYGEN_FEATURE_1]
-          alert(
-            `You ${license ? 'can' : 'cannot'} use this feature! ${license ? '🎉' : '😢'}`
-          )
+          const { meta } = licenses[appFeatures.KEYGEN_FEATURE_1]
+          if (!meta) {
+            alert(`You can't use this feature because a license for it was not found. ✋`)
+            return
+          }
+
+          if (meta.valid) {
+            alert(`You can use this feature! 🎉`)
+          } else {
+            alert(`You can't use this feature! 😨 (license ${meta.detail})`)
+          }
         })
 
         feature2.disabled = false
         feature2.addEventListener("click", () => {
-          const license = licenses[appFeatures.KEYGEN_FEATURE_2]
-          alert(
-            `You ${license ? 'can' : 'cannot'} use this feature! ${license ? '🎊' : '😩'}`
-          )
+          const { meta } = licenses[appFeatures.KEYGEN_FEATURE_2]
+          if (!meta) {
+            alert(`You can't use this feature because a license for it was not found. 🚫`)
+            return
+          }
+
+          if (meta.valid) {
+            alert(`You can use this feature! 🙂`)
+          } else {
+            alert(`You can't use this feature! 🤷‍♂️ (license ${meta.detail})`)
+          }
         })
 
         feature3.disabled = false
         feature3.addEventListener("click", () => {
-          const license = licenses[appFeatures.KEYGEN_FEATURE_3]
-          alert(
-            `You ${license ? 'can' : 'cannot'} use this feature! ${license ? '💥' : '😭'}`
-          )
+          const { meta } = licenses[appFeatures.KEYGEN_FEATURE_3]
+          if (!meta) {
+            alert(`You can't use this feature because a license for it was not found. 💀`)
+            return
+          }
+
+          if (meta.valid) {
+            alert(`You can use this feature! 👏`)
+          } else {
+            alert(`You can't use this feature! 😭 (license ${meta.detail})`)
+          }
         })
       }
 

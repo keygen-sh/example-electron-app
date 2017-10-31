@@ -1,14 +1,21 @@
 const { ipcRenderer } = require("electron")
+const Store = require("electron-store")
+const fetch = require("node-fetch")
+
+const store = new Store()
+module.exports.store = store
 
 // Account and product IDs. You can get this information by logging into your
 // dashboard: https://app.keygen.sh
 const KEYGEN_ACCOUNT_ID = "1fddcec8-8dd3-4d8d-9b16-215cac0f9b52"
 const KEYGEN_PRODUCT_ID = "5499e2ec-47e6-44cb-91e9-b5d5d65c5590"
 
+module.exports.accountId = KEYGEN_ACCOUNT_ID
+module.exports.productId = KEYGEN_PRODUCT_ID
+
 // Base vars for requests
 const KEYGEN_REQUEST_BASEURL = `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}`
 const KEYGEN_REQUEST_HEADERS = {
-  "Content-Type": "application/vnd.api+json",
   "Accept": "application/vnd.api+json"
 }
 
@@ -26,7 +33,7 @@ module.exports.appFeatures = {
 
 // Get an existing session (if one exists and has not expired)
 function getSession() {
-  let session = localStorage.getItem("session")
+  let session = store.get("session")
 
   if (session != null) {
     session = JSON.parse(session)
@@ -51,8 +58,8 @@ function clearSession() {
     })
   }
 
-  localStorage.removeItem("currentUser")
-  localStorage.removeItem("session")
+  store.delete("currentUser")
+  store.delete("session")
 
   ipcRenderer.send("unauthenticated")
 }
@@ -75,7 +82,7 @@ async function createSession(email, password) {
   const { id, attributes: { token, expiry } } = data
 
   // Store session
-  localStorage.setItem("session", JSON.stringify({ id, token, expiry }))
+  store.set("session", JSON.stringify({ id, token, expiry }))
 
   // Get the current user
   const profile = await fetch(`${KEYGEN_REQUEST_BASEURL}/profile`, {
@@ -83,17 +90,36 @@ async function createSession(email, password) {
     method: "GET"
   })
   const { data: user } = await profile.json()
-  localStorage.setItem("currentUser", JSON.stringify(user))
+  store.set("currentUser", JSON.stringify(user))
 
   return { id, token, expiry }
 }
 module.exports.createSession = createSession
 
 // Get all of the user's licenses for the product
-async function getLicenses() {
+const validatedLicenses = {
+  [KEYGEN_FEATURE_1]: {},
+  [KEYGEN_FEATURE_2]: {},
+  [KEYGEN_FEATURE_3]: {}
+}
+
+function resetValidatedLicenses() {
+  Object.keys(validatedLicenses).forEach(key => {
+    validatedLicenses[key] = {}
+  })
+}
+module.exports.resetValidatedLicenses = resetValidatedLicenses
+
+async function getLicenses(revalidate = false) {
   const session = getSession()
   if (session == null) {
     ipcRenderer.send("unauthenticated")
+  }
+
+  if (!revalidate && Object.values(validatedLicenses).every(l => Object.keys(l).length)) {
+    return {
+      licenses: validatedLicenses
+    }
   }
 
   const licenses = await fetch(`${KEYGEN_REQUEST_BASEURL}/licenses?product=${KEYGEN_PRODUCT_ID}`, {
@@ -111,29 +137,32 @@ async function getLicenses() {
     return { errors }
   }
 
-  const validatedLicenses = {}
-  for (let license of data) {
+  const validations = data.map(async license => {
     const { id, relationships: { policy: { data: policy } } } = license
 
     switch (policy.id) {
       case KEYGEN_FEATURE_1:
       case KEYGEN_FEATURE_2:
       case KEYGEN_FEATURE_3:
-        // Validate the current license
         const validation = await fetch(`${KEYGEN_REQUEST_BASEURL}/licenses/${id}/actions/validate`, {
           headers: Object.assign({}, KEYGEN_REQUEST_HEADERS, { "Authorization": `Bearer ${session.token}` }),
           method: "GET"
         })
 
-        const { meta } = await validation.json()
-        validatedLicenses[policy.id] = meta.valid
+        const { meta, data } = await validation.json()
+        validatedLicenses[policy.id] = { meta, data }
 
         break
       default:
         // This version of our app doesn't use this policy so it's okay to skip it
         break
     }
-  }
+
+    return Promise.resolve()
+  })
+
+  // Wait for validations to finish
+  await Promise.all(validations)
 
   // Return an object containing the validated licenses for the user
   return {

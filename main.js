@@ -1,26 +1,87 @@
-const { app, BrowserWindow, ipcMain } = require("electron")
+const { app, BrowserWindow, autoUpdater, ipcMain, dialog } = require("electron")
+const { accountId, productId, getLicenses, resetValidatedLicenses } = require("./keygen")
 const path = require("path")
 const url = require("url")
+
+const { platform, env } = process
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let win
 
+// Keep a timestamp of when the last update occured
+let lastUpdateAttemptAt
+
 function createWindow() {
   // Create the browser window.
   win = new BrowserWindow({ width: 800, height: 600 })
+
+  if (env.NODE_ENV === 'development') {
+    win.webContents.openDevTools()
+  }
 
   // Load the login page by default.
   win.loadURL(`file://${__dirname}/login.html`)
 
   // Load the login page when user is unauthenticated.
   ipcMain.on("unauthenticated", (event) => {
+    resetValidatedLicenses()
+
     win.loadURL(`file://${__dirname}/login.html`)
   })
 
   // Load our app when user is authenticated.
-  ipcMain.on("authenticated", (event) => {
+  ipcMain.on("authenticated", async event => {
     win.loadURL(`file://${__dirname}/index.html`)
+
+    if (env.NODE_ENV === 'development') {
+      return // Skip updates on development env
+    }
+
+    // Attempt to update the app after the user is authenticated
+    const { licenses } = await getLicenses()
+    if (!Object.values(licenses).some(l => Object.keys(l).length)) {
+      return
+    }
+
+    // Use first available license key that's valid for updates
+    const [license] = Object.values(licenses).filter(l => l.meta && l.meta.valid)
+    if (!license) {
+      return
+    }
+
+    if (lastUpdateAttemptAt != null && ((+new Date) - lastUpdateAttemptAt) < 43200000 /* every 12 hours */) {
+      return
+    } else {
+      lastUpdateAttemptAt = +new Date
+    }
+
+    const { key } = license.data.attributes
+    autoUpdater.setFeedURL(`https://dist.keygen.sh/v1/${accountId}/${productId}/update/${platform}/zip/${app.getVersion()}?key=${key}`)
+
+    autoUpdater.on('error', err => win.webContents.send('error', err))
+    autoUpdater.on('checking-for-update', () => win.webContents.send('log', 'checking-for-update', autoUpdater.getFeedURL()))
+    autoUpdater.on('update-available', () => win.webContents.send('log', 'update-available', autoUpdater.getFeedURL()))
+    autoUpdater.on('update-not-available', () => win.webContents.send('log', 'update-not-available', autoUpdater.getFeedURL()))
+    autoUpdater.on('update-downloaded', (...args) => {
+      win.webContents.send('log', 'update-downloaded', autoUpdater.getFeedURL(), args)
+
+      const choice = dialog.showMessageBox(win, {
+        message: 'An update has been downloaded. Do you want to restart now to finish installing it?',
+        title: 'Update is ready',
+        type: 'question',
+        buttons: [
+          'Yes',
+          'No'
+        ]
+      })
+
+      if (choice === 0) {
+        autoUpdater.quitAndInstall()
+      }
+    })
+
+    autoUpdater.checkForUpdates()
   })
 
   // Open the DevTools.
