@@ -4,6 +4,8 @@
 
 This is a minimal Electron application integrated with [Keygen](https://keygen.sh) to handle licensing certain app features individually via user-accounts, as well as providing auto-updates using [Keygen Dist](https://keygen.sh/distribution). It is based on the [Quick Start Guide](http://electron.atom.io/docs/tutorial/quick-start) within the Electron documentation.
 
+⚠️ For a much simpler Electron app example (only license key validation—no user login, no auto-updates, etc.), check out our [basic Electron app example](https://github.com/keygen-sh/basic-example-electron-app).
+
 **Use this app along with the [Electron API Demos](http://electron.atom.io/#get-started) app for API code examples to help you get started.**
 
 A basic Electron application needs just these files:
